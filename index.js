@@ -3,11 +3,9 @@ const { useMultiFileAuthState } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
 const express = require('express');
 const P = require('pino');
-
 const app = express();
-app.get('/', (req, res) => res.send('Bot calisiyor'));
+app.get('/', (req, res) => res.send('Bot aktif'));
 app.listen(process.env.PORT || 3000, () => console.log('Site Live'));
-
 async function start() {
   console.log('Bot baslatiliyor...');
   const { state, saveCreds } = await useMultiFileAuthState('auth');
