@@ -1,1 +1,47 @@
-const express=require('express');const fs=require('fs');const {default:makeWASocket,useMultiFileAuthState,DisconnectReason}=require('@whiskeysockets/baileys');const P=require('pino');const app=express();const PORT=process.env.PORT||10000;let code=null;let sock=null;const NUMARA="905445089169";async function bot(){const {state,saveCreds}=await useMultiFileAuthState('auth');sock=makeWASocket({auth:state,logger:P({level:'silent'}),browser:['Ubuntu','Chrome','20.0']});sock.ev.on('creds.update',saveCreds);sock.ev.on('connection.update',async u=>{if(u.connection==='open'){code=null;console.log('BAGLANDI');}if(u.connection==='close'&&u.lastDisconnect?.error?.output?.statusCode!==DisconnectReason.loggedOut){code=null;setTimeout(bot,3000);}});if(!state.creds.registered){await new Promise(r=>setTimeout(r,3000));try{code=await sock.requestPairingCode(NUMARA);console.log('KOD:',code);}catch(e){console.log(e);}}sock.ev.on('messages.upsert',async m=>{const z=m.messages[0];if(!z.message||z.key.fromMe)return;const t=z.message.conversation||z.message.extendedTextMessage?.text||'';if(t.toLowerCase()==='bot')await sock.sendMessage(z.key.remoteJid,{text:'BOT AKTIF Azam!'});});}app.get('/',(a,b)=>b.send('OK - /kod a git'));app.get('/kod',(a,b)=>{if(!code)return b.send('Kod olusuyor 10sn sonra yenile...<meta http-equiv="refresh" content="3">');b.send(`<h1>KODUN: ${code}</h1><p>WhatsApp > Ayarlar > Bagli Cihazlar > Cihazi Bagla > Telefon numarasiyla bagla > Bu kodu yaz</p><h2>${code}</h2>`);});app.get('/yenile',(a,b)=>{if(fs.existsSync('auth'))fs.rmSync('auth',{recursive:true,force:true});code=null;b.send('Silindi /kod a git<meta http-equiv="refresh" content="2;url=/kod">');});app.listen(PORT,()=>bot());
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require("@whiskeysockets/baileys")
+const express = require("express")
+const fs = require("fs")
+const app = express()
+let sock
+let qrCode = null
+
+async function startBot() {
+    const { state, saveCreds } = await useMultiFileAuthState("auth_info_baileys")
+    sock = makeWASocket({ auth: state, printQRInTerminal: false })
+    
+    if (!sock.authState.creds.registered) {
+        setTimeout(async () => {
+            try {
+                let code = await sock.requestPairingCode("905445089169")
+                qrCode = code?.match(/.{1,4}/g)?.join("-") || code
+                console.log("KOD:", qrCode)
+            } catch(e){ console.log(e) }
+        }, 5000)
+    }
+    
+    sock.ev.on("creds.update", saveCreds)
+    sock.ev.on("connection.update", (u) => {
+        if (u.connection === "open") console.log("Baglandi")
+        if (u.connection === "close") startBot()
+    })
+    
+    sock.ev.on("messages.upsert", async (m) => {
+        const msg = m.messages[0]
+        if (!msg.message || msg.key.fromMe) return
+        const text = msg.message.conversation || msg.message.extendedTextMessage?.text || ""
+        if (text.toLowerCase().includes("bot")) {
+            await sock.sendMessage(msg.key.remoteJid, { text: "BOT AKTIF Azam!" })
+        }
+    })
+}
+
+app.get("/", (req,res) => res.send("OK - /kod a git"))
+app.get("/kod", (req,res) => res.send(qrCode ? `<h1 style="font-size:50px;text-align:center;margin-top:100px">${qrCode}</h1>` : "Kod bekleniyor, 10 sn sonra yenile"))
+app.get("/yenile", (req,res) => {
+    try { fs.rmSync("auth_info_baileys", { recursive: true, force: true }) } catch(e){}
+    qrCode = null
+    res.send("Silindi - 10 sn sonra /kod a git")
+    setTimeout(() => startBot(), 2000)
+})
+
+app.listen(10000, () => { startBot() })
